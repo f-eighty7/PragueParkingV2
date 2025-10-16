@@ -107,3 +107,132 @@ ParkingSpot FindSpotByRegNum(ParkingGarage garage, string regNum)
 	return null;
 }
 
+void SearchVehicleUI(ParkingGarage garage)
+{
+	Console.Write("Ange registreringsnummer att söka efter: ");
+	string regNumFromUser = Console.ReadLine();
+
+	ParkingSpot foundSpot = FindSpotByRegNum(garage, regNumFromUser);
+
+	if (foundSpot != null)
+	{
+		Console.WriteLine($"\nFordonet hittades på plats: {foundSpot.SpotNumber}");
+		Console.WriteLine("Fordon på denna plats:");
+
+		foreach (Vehicle vehicle in foundSpot.ParkedVehicles)
+		{
+			Console.WriteLine($"- Reg-nr: {vehicle.RegNum}, Ankomst: {vehicle.ArrivalTime}");
+		}
+	}
+	else
+	{
+		Console.WriteLine($"\nEtt fordon med registreringsnummer '{regNumFromUser}' kunde inte hittas.");
+	}
+}
+
+bool RemoveVehicle(ParkingGarage garage, string regNum)
+{
+	ParkingSpot spot = FindSpotByRegNum(garage, regNum);
+
+	if (spot == null)
+	{
+		Console.WriteLine($"\nEtt fordon med registreringsnummer '{regNum}' kunde inte hittas.");
+		return false;
+	}
+
+	Vehicle vehicleToRemove = null;
+	foreach (Vehicle vehicle in spot.ParkedVehicles)
+	{
+		if (vehicle.RegNum.ToUpper() == regNum.ToUpper())
+		{
+			vehicleToRemove = vehicle;
+			break;
+		}
+	}
+
+	if (vehicleToRemove != null)
+	{
+		spot.ParkedVehicles.Remove(vehicleToRemove);
+		Console.WriteLine($"\nFordonet med reg-nr {regNum} har tagits bort från plats {spot.SpotNumber}.");
+		return true;
+	}
+	return false;
+}
+
+void RemoveVehicleUI(ParkingGarage garage)
+{
+	Console.Write("Ange registreringsnummer på fordonet du vill ta bort: ");
+	string regNumFromUser = Console.ReadLine();
+
+	RemoveVehicle(garage, regNumFromUser);
+}
+
+bool MoveVehicle(ParkingGarage garage, string regNum, int toSpotNumber)
+{
+	ParkingSpot fromSpot = FindSpotByRegNum(garage, regNum);
+
+	if (fromSpot == null)
+	{
+		Console.WriteLine($"\nFordonet med registreringsnummer '{regNum}' kunde inte hittas.");
+		return false;
+	}
+
+	if (toSpotNumber < 1 || toSpotNumber > 100)
+	{
+		Console.WriteLine("\nOgiltig destinationsplats. Ange ett nummer mellan 1-100.");
+		return false;
+	}
+
+	ParkingSpot toSpot = garage.Spots[toSpotNumber - 1];
+
+	if (toSpot.ParkedVehicles.Count > 0)
+	{
+		Console.WriteLine($"\nDestinationsplatsen {toSpotNumber} är redan upptagen.");
+		return false;
+	}
+
+	if (fromSpot.SpotNumber == toSpot.SpotNumber)
+	{
+		Console.WriteLine("\nFordonet står redan på denna plats. Ingen flytt utförd.");
+		return false;
+	}
+
+
+	Vehicle vehicleToMove = null;
+	foreach (Vehicle vehicle in fromSpot.ParkedVehicles)
+	{
+		if (vehicle.RegNum.ToUpper() == regNum.ToUpper())
+		{
+			vehicleToMove = vehicle;
+			break;
+		}
+	}
+
+	if (vehicleToMove != null)
+	{
+		fromSpot.ParkedVehicles.Remove(vehicleToMove);
+		toSpot.ParkedVehicles.Add(vehicleToMove);
+
+		Console.WriteLine($"\nFordonet {regNum} har flyttats från plats {fromSpot.SpotNumber} till plats {toSpot.SpotNumber}.");
+		return true;
+	}
+
+	return false;
+}
+
+void MoveVehicleUI(ParkingGarage garage)
+{
+	Console.Write("Ange registreringsnummer på fordonet som ska flyttas: ");
+	string regNumFromUser = Console.ReadLine();
+
+	Console.Write($"Ange ny plats (1-100) för fordonet '{regNumFromUser}': ");
+	if (int.TryParse(Console.ReadLine(), out int toSpotNumber))
+	{
+		MoveVehicle(garage, regNumFromUser, toSpotNumber);
+	}
+	else
+	{
+		Console.WriteLine("\nFelaktig inmatning. Vänligen ange en siffra för platsnummer.");
+	}
+}
+
