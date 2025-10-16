@@ -94,5 +94,16 @@ void AddVehicle(ParkingGarage garage, string vehicleChoice, string RegNum)
 
 ParkingSpot FindSpotByRegNum(ParkingGarage garage, string regNum)
 {
-	
+	foreach (ParkingSpot spot in garage.Spots)
+	{
+		foreach (Vehicle vehicle in spot.ParkedVehicles)
+		{
+			if (vehicle.RegNum.ToUpper() == regNum.ToUpper())
+			{
+				return spot;
+			}
+		}
+	}
+	return null;
 }
+
