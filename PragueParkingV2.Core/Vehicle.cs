@@ -1,8 +1,11 @@
-﻿public class Vehicle
+﻿namespace PragueParkingV2.Core
 {
-	// Egenskap 1: Alla fordon har ett reg-nummer.
-	public string RegNum { get; set; }
+	public class Vehicle
+	{
+		// Egenskap 1: Alla fordon har ett reg-nummer.
+		public string RegNum { get; set; }
 
-	// Egenskap 2: Alla fordon har en ankomsttid.
-	public DateTime ArrivalTime { get; set; }
+		// Egenskap 2: Alla fordon har en ankomsttid.
+		public DateTime ArrivalTime { get; set; }
+	}
 }

@@ -1,4 +1,6 @@
-﻿ParkingGarage garage = new ParkingGarage();
+﻿using PragueParkingV2.Core;
+
+ParkingGarage garage = new ParkingGarage();
 
 for (int i = 0; i < 100; i++)
 {

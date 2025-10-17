@@ -1,7 +1,11 @@
 ﻿using System.Collections.Generic;
 
-public class ParkingGarage
+namespace PragueParkingV2.Core
 {
-	// En egenskap som håller en lista av ParkingSpot-objekt.
-	public List<ParkingSpot> Spots { get; set; } = new List<ParkingSpot>();
+	public class ParkingGarage
+	{
+		// En egenskap som håller en lista av ParkingSpot-objekt.
+		public List<ParkingSpot> Spots { get; set; } = new List<ParkingSpot>();
+	}
+
 }
