@@ -1,68 +1,281 @@
 ﻿using PragueParkingV2.Core;
 using PragueParkingV2.Data;
+using Spectre.Console;
+using System.Linq;
 
-DataAccess dataAccess = new DataAccess(); // Skapa objektet som hanterar filer
-ParkingGarage garage = dataAccess.LoadGarage(); // Ladda från fil (eller få ett nytt tomt)
+// ======== SKAPA DATAACCESS OCH LADDA GARAGET ========
+DataAccess dataAccess = new DataAccess();
+ParkingGarage garage = dataAccess.LoadGarage();
 
-
-
-// --- UI-METODER ---
-void AddVehicleUI(ParkingGarage garage) //
+// ======== HUVUDMENY ========
+while (true)
 {
-	Console.Write("Vilken fordonstyp? (1 för Bil, 2 för MC): "); 
-	string vehicleChoice = Console.ReadLine();
-	Console.Write("Ange registreringsnummer: "); 
-	string regNum = Console.ReadLine();
+	Console.Clear();
+	PrintGarageStatus(garage);
 
-	AddVehicle(garage, vehicleChoice, regNum);
+	AnsiConsole.MarkupLine("[yellow]Välj ett alternativ:[/]");
+	var choice = AnsiConsole.Prompt(
+		new SelectionPrompt<string>()
+			.PageSize(10)
+			.AddChoices(new[] {
+				"1. Parkera fordon",
+				"2. Ta bort fordon",
+				"3. Flytta fordon",
+				"4. Sök fordon",
+				"0. Avsluta"
+			}));
+
+	switch (choice)
+	{
+		case "1. Parkera fordon":
+			AddVehicleUI(garage);
+			if (garage != null) dataAccess.SaveGarage(garage);
+			break;
+
+		case "2. Ta bort fordon":
+			RemoveVehicleUI(garage);
+			if (garage != null) dataAccess.SaveGarage(garage);
+			break;
+
+		case "3. Flytta fordon":
+			MoveVehicleUI(garage);
+			if (garage != null) dataAccess.SaveGarage(garage);
+			break;
+
+		case "4. Sök fordon":
+			SearchVehicleUI(garage); 
+			break;
+
+		case "0. Avsluta":
+			AnsiConsole.MarkupLine("[green]Sparar och avslutar... Hejdå![/]");
+			if (garage != null) dataAccess.SaveGarage(garage);
+			return;
+
+		default:
+			AnsiConsole.MarkupLine("[red]Oväntat val.[/]");
+			break;
+	}
+}
+
+// === UI-METODER ===
+void AddVehicleUI(ParkingGarage garage)
+{
+	AnsiConsole.MarkupLine("[underline blue]Parkera Fordon[/]");
+	bool actionTaken = false;
+
+	var vehicleTypeChoice = AnsiConsole.Prompt(
+		new SelectionPrompt<string>()
+			.Title("Vilken [green]fordonstyp[/]?")
+			.PageSize(3)
+			.AddChoices(new[] { "Bil", "MC", "[grey]Avbryt[/]" }));
+
+	if (vehicleTypeChoice == "[grey]Avbryt[/]") return;
+
+	var regNum = AnsiConsole.Prompt(
+		new TextPrompt<string>("Ange [green]registreringsnummer[/] (lämna tomt för att avbryta):")
+			.AllowEmpty()
+		)?.ToUpper();
+
+	if (string.IsNullOrWhiteSpace(regNum)) return;
+
+	string vehicleChoiceCode = vehicleTypeChoice == "Bil" ? "1" : "2";
+
+	AddVehicle(garage, vehicleChoiceCode, regNum);
+	actionTaken = true;
+
+	if (actionTaken)
+	{
+		AnsiConsole.WriteLine();
+		AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+		Console.ReadKey(true);
+	}
 }
 
 void SearchVehicleUI(ParkingGarage garage)
 {
-	Console.Write("Ange registreringsnummer att söka efter: ");
-	string regNumFromUser = Console.ReadLine();
-	ParkingSpot? foundSpot = FindSpotByRegNum(garage, regNumFromUser);
+	AnsiConsole.MarkupLine("[underline blue]Sök Fordon[/]");
+	bool actionTaken = false;
 
-	if (foundSpot != null)
+	var searchType = AnsiConsole.Prompt(
+		new SelectionPrompt<string>()
+			.Title("Sök efter [green]fordon via[/]?")
+			.PageSize(3)
+			.AddChoices(new[] { "Registreringsnummer", "Platsnummer", "[grey]Avbryt[/]" }));
+
+	if (searchType == "[grey]Avbryt[/]") return;
+
+	if (searchType == "Registreringsnummer")
 	{
-		Console.WriteLine($"\nFordonet hittades på plats: {foundSpot.SpotNumber}");
-		Console.WriteLine("Fordon på denna plats:");
-		foreach (Vehicle vehicle in foundSpot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
+		var regNumToSearch = AnsiConsole.Prompt(
+			new TextPrompt<string>("Ange [green]registreringsnummer[/] att söka efter (lämna tomt för att avbryta):")
+				.AllowEmpty()
+			)?.ToUpper();
+
+		if (string.IsNullOrWhiteSpace(regNumToSearch)) return;
+
+		ParkingSpot? foundSpot = FindSpotByRegNum(garage, regNumToSearch);
+		if (foundSpot != null)
 		{
-			Console.WriteLine($"- Reg-nr: {vehicle.RegNum ?? "N/A"}, Ankomst: {vehicle.ArrivalTime}");
+			AnsiConsole.MarkupLine($"\nFordonet hittades på plats: [yellow]{foundSpot.SpotNumber}[/]");
+			AnsiConsole.MarkupLine("Fordon på denna plats:");
+			foreach (Vehicle vehicle in foundSpot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
+			{
+				string vehicleType = vehicle is Car ? "[blue]BIL[/]" : (vehicle is MC ? "[magenta]MC[/]" : "[grey]Okänd[/]");
+				AnsiConsole.MarkupLine($"- Reg-nr: [green]{vehicle.RegNum ?? "N/A"}[/], Ankomst: {vehicle.ArrivalTime}");
+			}
 		}
+		else
+		{
+			AnsiConsole.MarkupLine($"\n[red]Ett fordon med registreringsnummer '{regNumToSearch}' kunde inte hittas.[/]");
+		}
+		actionTaken = true;
 	}
 	else
 	{
-		Console.WriteLine($"\nEtt fordon med registreringsnummer '{regNumFromUser}' kunde inte hittas.");
+		var spotNumToShow = AnsiConsole.Prompt(
+			new TextPrompt<int?>("Ange [green]platsnummer[/] (1-100) att visa (lämna tomt för att avbryta):")
+				.AllowEmpty()
+				.HideDefaultValue()
+				.ValidationErrorMessage("[red]Ange ett giltigt nummer eller lämna tomt.[/]")
+		);
+
+
+		if (!spotNumToShow.HasValue) return;
+
+		ShowSpotContent(spotNumToShow.Value);
+		actionTaken = true;
+	}
+
+	if (actionTaken)
+	{
+		AnsiConsole.WriteLine();
+		AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+		Console.ReadKey(true);
 	}
 }
 
-void RemoveVehicleUI(ParkingGarage garage) 
+void RemoveVehicleUI(ParkingGarage garage)
 {
-	Console.Write("Ange registreringsnummer på fordonet du vill ta bort: "); 
-	string regNumFromUser = Console.ReadLine();
-	RemoveVehicle(garage, regNumFromUser);
+	AnsiConsole.MarkupLine("[underline blue]Ta bort Fordon[/]");
+	bool actionTaken = false;
+
+	var regNumToRemove = AnsiConsole.Prompt(
+		new TextPrompt<string>("Ange [green]registreringsnummer[/] på fordonet att ta bort (lämna tomt för att avbryta):")
+			.AllowEmpty()
+		)?.ToUpper();
+
+	if (string.IsNullOrWhiteSpace(regNumToRemove)) return;
+
+	bool success = RemoveVehicle(garage, regNumToRemove);
+	actionTaken = true;
+
+	if (actionTaken)
+	{
+		AnsiConsole.WriteLine();
+		AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+		Console.ReadKey(true);
+	}
 }
 
 void MoveVehicleUI(ParkingGarage garage)
 {
-	Console.Write("Ange registreringsnummer på fordonet som ska flyttas: ");
-	string regNumFromUser = Console.ReadLine();
+	AnsiConsole.MarkupLine("[underline blue]Flytta Fordon[/]");
+	bool actionTaken = false;
 
-	Console.Write($"Ange ny plats (1-100) för fordonet '{regNumFromUser}': "); 
-	if (int.TryParse(Console.ReadLine(), out int toSpotNumber))
+	var regNumToMove = AnsiConsole.Prompt(
+		new TextPrompt<string>("Ange [green]registreringsnummer[/] på fordonet som ska flyttas (lämna tomt för att avbryta):")
+			.AllowEmpty()
+		)?.ToUpper();
+
+	if (string.IsNullOrWhiteSpace(regNumToMove)) return;
+
+	var fromSpot = FindSpotByRegNum(garage, regNumToMove);
+	if (fromSpot == null)
 	{
-		MoveVehicle(garage, regNumFromUser, toSpotNumber);
+		AnsiConsole.MarkupLine($"\n[red]Fordonet med registreringsnummer '{regNumToMove}' kunde inte hittas.[/]");
+		actionTaken = true;
 	}
 	else
 	{
-		Console.WriteLine("\nFelaktig inmatning. Vänligen ange en siffra för platsnummer.");
+		var toSpotNumber = AnsiConsole.Prompt(
+			new TextPrompt<int?>($"Ange [green]ny plats[/] (1-100) för fordonet '{regNumToMove}' (lämna tomt för att avbryta):")
+				.AllowEmpty()
+				.HideDefaultValue()
+				.ValidationErrorMessage("[red]Ange ett giltigt nummer eller lämna tomt.[/]")
+		);
+
+		if (!toSpotNumber.HasValue) return;
+
+		bool success = MoveVehicle(garage, regNumToMove, toSpotNumber.Value);
+		actionTaken = true;
+	}
+
+	if (actionTaken)
+	{
+		AnsiConsole.WriteLine();
+		AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+		Console.ReadKey(true);
 	}
 }
 
-// --- LOGIK-METODER ---
+void ShowSpotContent(int spotNumber)
+{
+	if (spotNumber >= 1 && spotNumber <= (garage.Spots?.Count ?? 0))
+	{
+		int index = spotNumber - 1;
+		ParkingSpot? spot = garage.Spots?[index];
 
+		if (spot != null && (spot.ParkedVehicles?.Count ?? 0) == 0)
+		{
+			AnsiConsole.MarkupLine($"\nPlats [yellow]{spotNumber}[/] är [green]tom[/].");
+		}
+		else if (spot != null)
+		{
+			AnsiConsole.MarkupLine($"\nPå plats [yellow]{spotNumber}[/] står:");
+			foreach (Vehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
+			{
+				string vehicleType = vehicle is Car ? "[blue]BIL[/]" : (vehicle is MC ? "[magenta]MC[/]" : "[grey]Okänd[/]");
+				AnsiConsole.MarkupLine($"- Reg-nr: [green]{vehicle.RegNum ?? "N/A"}[/], Ankomst: {vehicle.ArrivalTime}");
+			}
+		}
+		else
+		{
+			AnsiConsole.MarkupLine($"[red]Fel: Kunde inte hitta information för plats {spotNumber}.[/]");
+		}
+	}
+	else
+	{
+		AnsiConsole.MarkupLine($"\n[red]Ogiltigt platsnummer. Ange ett nummer mellan 1 och {garage.Spots?.Count ?? 100}.[/]");
+	}
+}
+
+// --- Statusutskrift (Används i huvudloopen) ---
+void PrintGarageStatus(ParkingGarage garage)
+{
+	AnsiConsole.MarkupLine("[cyan]--- GARAGE STATUS ---[/]");
+	bool isEmpty = true;
+	foreach (ParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<ParkingSpot>())
+	{
+		if ((spot.ParkedVehicles?.Count ?? 0) > 0)
+		{
+			isEmpty = false;
+			AnsiConsole.Markup($"Plats [bold]{spot.SpotNumber}[/]: ");
+			foreach (Vehicle vehicle in spot.ParkedVehicles)
+			{
+				string vehicleType = vehicle is Car ? "[blue]BIL[/]" : (vehicle is MC ? "[magenta]MC[/]" : "[grey]Okänd[/]");
+				AnsiConsole.Markup($"{vehicleType}:[green]{vehicle.RegNum ?? "N/A"}[/] ");
+			}
+			Console.WriteLine();
+		}
+	}
+	if (isEmpty)
+	{
+		AnsiConsole.MarkupLine("[grey](Garaget är tomt)[/]");
+	}
+	AnsiConsole.MarkupLine("[cyan]---------------------[/]\n");
+}
+
+// === LOGIK-METODER ===
 void AddVehicle(ParkingGarage garage, string vehicleChoice, string regNum)
 {
 	if (string.IsNullOrWhiteSpace(regNum))
@@ -168,7 +381,6 @@ ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 	}
 	return null;
 }
-
 
 bool RemoveVehicle(ParkingGarage garage, string regNum)
 {

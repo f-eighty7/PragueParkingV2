@@ -1,6 +1,7 @@
 ﻿using PragueParkingV2.Core;
 using System.IO;		// Behövs för att hantera filer
 using System.Text.Json; // Behövs för serialisering
+using System.Text.Json.Serialization;
 
 namespace PragueParkingV2.Data
 {
