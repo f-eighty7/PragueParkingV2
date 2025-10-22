@@ -5,7 +5,10 @@ using System.Linq;
 
 // ======== SKAPA DATAACCESS OCH LADDA GARAGET ========
 DataAccess dataAccess = new DataAccess();
-ParkingGarage garage = dataAccess.LoadGarage();
+Config config = dataAccess.LoadConfig();
+ParkingGarage garage = dataAccess.LoadGarage(config);
+
+AnsiConsole.MarkupLine($"[grey]Konfiguration laddad: {config.GarageSize} platser.[/]");
 
 // ======== HUVUDMENY ========
 while (true)
@@ -28,7 +31,7 @@ while (true)
 	switch (choice)
 	{
 		case "1. Parkera fordon":
-			AddVehicleUI(garage);
+			AddVehicleUI(garage, config);
 			if (garage != null) dataAccess.SaveGarage(garage);
 			break;
 
@@ -58,18 +61,24 @@ while (true)
 }
 
 // === UI-METODER ===
-void AddVehicleUI(ParkingGarage garage)
+void AddVehicleUI(ParkingGarage garage, Config config)
 {
 	AnsiConsole.MarkupLine("[underline blue]Parkera Fordon[/]");
 	bool actionTaken = false;
 
-	var vehicleTypeChoice = AnsiConsole.Prompt(
+	var vehicleTypeChoices = config.AllowedVehicleTypes?
+								.Select(vt => vt.TypeName)
+								.ToList() ?? new List<string>(); 
+
+	vehicleTypeChoices.Add("[grey]Avbryt[/]"); 
+
+	var selectedTypeName = AnsiConsole.Prompt(
 		new SelectionPrompt<string>()
 			.Title("Vilken [green]fordonstyp[/]?")
-			.PageSize(3)
-			.AddChoices(new[] { "Bil", "MC", "[grey]Avbryt[/]" }));
+			.PageSize(vehicleTypeChoices.Count)
+			.AddChoices(vehicleTypeChoices));
 
-	if (vehicleTypeChoice == "[grey]Avbryt[/]") return;
+	if (selectedTypeName == "[grey]Avbryt[/]") return;
 
 	var regNum = AnsiConsole.Prompt(
 		new TextPrompt<string>("Ange [green]registreringsnummer[/] (lämna tomt för att avbryta):")
@@ -78,9 +87,7 @@ void AddVehicleUI(ParkingGarage garage)
 
 	if (string.IsNullOrWhiteSpace(regNum)) return;
 
-	string vehicleChoiceCode = vehicleTypeChoice == "Bil" ? "1" : "2";
-
-	AddVehicle(garage, vehicleChoiceCode, regNum);
+	AddVehicle(garage, config, selectedTypeName, regNum); 
 	actionTaken = true;
 
 	if (actionTaken)
@@ -276,96 +283,84 @@ void PrintGarageStatus(ParkingGarage garage)
 }
 
 // === LOGIK-METODER ===
-void AddVehicle(ParkingGarage garage, string vehicleChoice, string regNum)
+void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, string regNum)
 {
-	if (string.IsNullOrWhiteSpace(regNum))
-	{
-		Console.WriteLine("\nOgiltigt registreringsnummer.");
-		return;
-	}
-
+	if (string.IsNullOrWhiteSpace(regNum)) { AnsiConsole.MarkupLine("\n[red]Ogiltigt registreringsnummer.[/]"); return; }
 	regNum = regNum.ToUpper();
 
-	if (vehicleChoice == "1")
+	if (FindSpotByRegNum(garage, regNum) != null) { AnsiConsole.MarkupLine($"\n[red]Ett fordon med reg-nr {regNum} finns redan parkerat.[/]"); return; }
+
+	VehicleTypeConfig? typeConfig = config.AllowedVehicleTypes?.FirstOrDefault(vt => vt.TypeName == selectedTypeName);
+
+	if (typeConfig == null) { AnsiConsole.MarkupLine($"\n[red]Okänd fordonstyp: {selectedTypeName}.[/]"); return; }
+
+	ParkingSpot? targetSpot = null;
+
+	if (typeConfig.MaxPerSpot > 1)
 	{
-		ParkingSpot? foundSpot = null;
+		foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+		{
+			if ((spot.ParkedVehicles?.Count ?? 0) > 0 &&
+				(spot.ParkedVehicles?.Count ?? 0) < typeConfig.MaxPerSpot &&
+				 spot.ParkedVehicles.All(v => v.GetType().Name.Equals(selectedTypeName, StringComparison.OrdinalIgnoreCase))) // Alla fordon på platsen är av samma typ
+			{
+				targetSpot = spot;
+				break;
+			}
+		}
+	}
+
+	if (targetSpot == null)
+	{
 		foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
 		{
 			if ((spot.ParkedVehicles?.Count ?? 0) == 0)
 			{
-				foundSpot = spot;
+				targetSpot = spot;
 				break;
 			}
 		}
+	}
 
-		if (foundSpot != null)
+	if (targetSpot != null)
+	{
+		Vehicle? newVehicle = null; // Ge ett startvärde (null) och markera som nullable (?)
+
+		if (selectedTypeName == "CAR")
 		{
-			if (FindSpotByRegNum(garage, regNum) != null)
-			{
-				Console.WriteLine($"\nEtt fordon med reg-nr {regNum} finns redan parkerat.");
-				return;
-			}
-			Car newCar = new Car { RegNum = regNum, ArrivalTime = DateTime.Now };
-			foundSpot.ParkedVehicles?.Add(newCar);
-			Console.WriteLine($"\nBilen med reg-nr {regNum} har parkerats på plats {foundSpot.SpotNumber}.");
+			newVehicle = new Car { RegNum = regNum, ArrivalTime = DateTime.Now };
+		}
+		else if (selectedTypeName == "MC")
+		{
+			newVehicle = new MC { RegNum = regNum, ArrivalTime = DateTime.Now };
 		}
 		else
 		{
-			Console.WriteLine("\nTyvärr är parkeringen full för bilar.");
-		}
-	}
-	else if (vehicleChoice == "2")
-	{
-		if (FindSpotByRegNum(garage, regNum) != null)
-		{
-			Console.WriteLine($"\nEtt fordon med reg-nr {regNum} finns redan parkerat.");
+			AnsiConsole.MarkupLine($"\n[red]Kan inte skapa okänd fordonstyp: {selectedTypeName}.[/]");
 			return;
 		}
 
-		bool parked = false;
-		foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+		if (newVehicle != null)
 		{
-			if ((spot.ParkedVehicles?.Count ?? 0) == 1 && spot.ParkedVehicles[0] is MC)
-			{
-				MC newMC = new MC { RegNum = regNum, ArrivalTime = DateTime.Now };
-				spot.ParkedVehicles?.Add(newMC);
-				Console.WriteLine($"\nMotorcykeln med reg-nr {regNum} har dubbelparkerats på plats {spot.SpotNumber}.");
-				parked = true;
-				break;
-			}
-		}
+			targetSpot.ParkedVehicles?.Add(newVehicle);
 
-		if (!parked)
-		{
-			ParkingSpot? foundSpot = null;
-			foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+			if ((targetSpot.ParkedVehicles?.Count ?? 0) > 1)
 			{
-				if ((spot.ParkedVehicles?.Count ?? 0) == 0)
-				{
-					foundSpot = spot;
-					break;
-				}
-			}
-
-			if (foundSpot != null)
-			{
-				MC newMC = new MC { RegNum = regNum, ArrivalTime = DateTime.Now };
-				foundSpot.ParkedVehicles?.Add(newMC);
-				Console.WriteLine($"\nMotorcykeln med reg-nr {regNum} har parkerats på plats {foundSpot.SpotNumber}.");
+				AnsiConsole.MarkupLine($"\nFordonet [green]{regNum}[/] ({selectedTypeName}) har lagts till på delad plats [yellow]{targetSpot.SpotNumber}[/].");
 			}
 			else
 			{
-				Console.WriteLine("\nTyvärr är parkeringen full för motorcyklar.");
+				AnsiConsole.MarkupLine($"\nFordonet [green]{regNum}[/] ({selectedTypeName}) har parkerats på plats [yellow]{targetSpot.SpotNumber}[/].");
 			}
 		}
 	}
 	else
 	{
-		Console.WriteLine("\nOgiltigt val av fordonstyp.");
+		AnsiConsole.MarkupLine($"\n[red]Tyvärr är parkeringen full för fordonstypen {selectedTypeName}.[/]");
 	}
 }
 
-ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
+	ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 {
 	if (string.IsNullOrWhiteSpace(regNum)) return null;
 

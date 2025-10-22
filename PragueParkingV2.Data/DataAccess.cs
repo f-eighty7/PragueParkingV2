@@ -9,6 +9,7 @@ namespace PragueParkingV2.Data
 	{
 		// Definierar filnamnet på ett ställe för enkelhetens skull
 		private const string GarageDataFile = "garage.json";
+		private const string ConfigFile = "config.json";
 
 		public void SaveGarage(ParkingGarage garage)
 		{
@@ -30,23 +31,19 @@ namespace PragueParkingV2.Data
 			}
 		}
 
-		public ParkingGarage LoadGarage()
+		public ParkingGarage LoadGarage(Config config) // <-- Tar nu emot Config!
 		{
 			try
 			{
-				// Steg 1: Kontrollera om datafilen existerar.
 				if (File.Exists(GarageDataFile))
 				{
-					// Steg 2: Läs allt textinnehåll från filen.
 					string jsonString = File.ReadAllText(GarageDataFile);
-
-					// Steg 3: Deserialisera (omvandla) textsträngen tillbaka till ett ParkingGarage-objekt.
-					// Om JSON-filen är tom eller korrupt kan detta kasta ett undantag (exception).
 					if (!string.IsNullOrWhiteSpace(jsonString))
 					{
 						ParkingGarage? loadedGarage = JsonSerializer.Deserialize<ParkingGarage>(jsonString);
 						if (loadedGarage != null)
 						{
+							Console.WriteLine($"[Info] Garage-data laddad från {GarageDataFile}.");
 							return loadedGarage;
 						}
 					}
@@ -54,26 +51,64 @@ namespace PragueParkingV2.Data
 			}
 			catch (JsonException jsonEx)
 			{
-				// Fångar specifikt fel som kan uppstå om JSON-datan är felaktig.
-				Console.WriteLine($"Fel vid läsning av JSON-data: {jsonEx.Message}");
-				Console.WriteLine("Skapar ett nytt, tomt garage istället.");
+				Console.WriteLine($"[Fel] Fel vid läsning av JSON-data från {GarageDataFile}: {jsonEx.Message}");
+				Console.WriteLine("[Info] Skapar ett nytt, tomt garage istället.");
 			}
 			catch (Exception ex)
 			{
-				// Fångar andra oväntade fel vid filläsning.
-				Console.WriteLine($"Fel vid laddning av data: {ex.Message}");
-				Console.WriteLine("Skapar ett nytt, tomt garage istället.");
+				Console.WriteLine($"[Fel] Kunde inte ladda garage-data från {GarageDataFile}: {ex.Message}");
+				Console.WriteLine("[Info] Skapar ett nytt, tomt garage istället.");
 			}
 
-			// Steg 4: Om filen inte fanns, var tom, korrupt, eller om något annat fel inträffade,
-			// skapa ett helt nytt, tomt garage-objekt och returnera det.
-			// Denna kod ser också till att skapa de 100 tomma platserna direkt.
+			// Fallback: Skapa ett nytt, tomt garage med storlek från konfigurationen.
+			Console.WriteLine($"[Info] Skapar nytt garage med {config.GarageSize} platser enligt konfiguration.");
 			ParkingGarage newGarage = new ParkingGarage();
-			for (int i = 0; i < 100; i++) // Standard 100 platser om ingen fil finns
+			for (int i = 0; i < config.GarageSize; i++) // Använder config.GarageSize!
 			{
 				newGarage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
 			}
 			return newGarage;
+		}
+
+		public Config LoadConfig()
+		{
+			Config loadedConfig = null;
+			try
+			{
+				if (File.Exists(ConfigFile))
+				{
+					string jsonString = File.ReadAllText(ConfigFile);
+					if (!string.IsNullOrWhiteSpace(jsonString))
+					{
+						loadedConfig = JsonSerializer.Deserialize<Config>(jsonString);
+					}
+				}
+				else
+				{
+					Console.WriteLine($"[Varning] Konfigurationsfilen {ConfigFile} hittades inte.");
+				}
+			}
+			catch (JsonException jsonEx) { Console.WriteLine($"[Fel] JSON-fel i {ConfigFile}: {jsonEx.Message}"); }
+			catch (Exception ex) { Console.WriteLine($"[Fel] Kunde inte ladda {ConfigFile}: {ex.Message}"); }
+
+			if (loadedConfig == null)
+			{
+				Console.WriteLine("[Info] Använder eller skapar standardkonfiguration.");
+				loadedConfig = new Config(); // Får standard GarageSize=100
+			}
+
+			if (loadedConfig.AllowedVehicleTypes == null || loadedConfig.AllowedVehicleTypes.Count == 0)
+			{
+				Console.WriteLine("[Info] Lägger till standardfordonstyper (CAR, MC) i konfigurationen.");
+				loadedConfig.AllowedVehicleTypes = new List<VehicleTypeConfig>
+				{
+					new VehicleTypeConfig { TypeName = "CAR", MaxPerSpot = 1 },
+					new VehicleTypeConfig { TypeName = "MC", MaxPerSpot = 2 }
+				};
+			}
+
+			Console.WriteLine($"[Info] Konfiguration aktiv: {loadedConfig.GarageSize} platser.");
+			return loadedConfig;
 		}
 	}
 }
