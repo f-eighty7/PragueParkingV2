@@ -2,10 +2,12 @@
 using PragueParkingV2.Data;
 using Spectre.Console;
 using System.Linq;
+using System.Collections.Generic;
 
 // ======== SKAPA DATAACCESS OCH LADDA GARAGET ========
 DataAccess dataAccess = new DataAccess();
 Config config = dataAccess.LoadConfig();
+Dictionary<string, decimal> priceList = dataAccess.LoadPriceList();
 ParkingGarage garage = dataAccess.LoadGarage(config);
 
 AnsiConsole.MarkupLine($"[grey]Konfiguration laddad: {config.GarageSize} platser.[/]");
@@ -25,6 +27,7 @@ while (true)
 				"2. Ta bort fordon",
 				"3. Flytta fordon",
 				"4. Sök fordon",
+				"5. Visa Karta",
 				"0. Avsluta"
 			}));
 
@@ -36,7 +39,7 @@ while (true)
 			break;
 
 		case "2. Ta bort fordon":
-			RemoveVehicleUI(garage);
+			RemoveVehicleUI(garage, priceList);
 			if (garage != null) dataAccess.SaveGarage(garage);
 			break;
 
@@ -47,6 +50,10 @@ while (true)
 
 		case "4. Sök fordon":
 			SearchVehicleUI(garage); 
+			break;
+
+		case "5. Visa Karta":
+			DisplayGarageMapUI(garage, config);
 			break;
 
 		case "0. Avsluta":
@@ -161,7 +168,7 @@ void SearchVehicleUI(ParkingGarage garage)
 	}
 }
 
-void RemoveVehicleUI(ParkingGarage garage)
+void RemoveVehicleUI(ParkingGarage garage, Dictionary<string, decimal> priceList) // <-- NY PARAMETER HÄR
 {
 	AnsiConsole.MarkupLine("[underline blue]Ta bort Fordon[/]");
 	bool actionTaken = false;
@@ -173,7 +180,7 @@ void RemoveVehicleUI(ParkingGarage garage)
 
 	if (string.IsNullOrWhiteSpace(regNumToRemove)) return;
 
-	bool success = RemoveVehicle(garage, regNumToRemove);
+	bool success = RemoveVehicle(garage, regNumToRemove, priceList);
 	actionTaken = true;
 
 	if (actionTaken)
@@ -223,6 +230,88 @@ void MoveVehicleUI(ParkingGarage garage)
 		AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
 		Console.ReadKey(true);
 	}
+}
+
+void DisplayGarageMapUI(ParkingGarage garage, Config config)
+{
+	AnsiConsole.MarkupLine("[underline blue]Översiktskarta - Parkeringshuset[/]");
+	AnsiConsole.WriteLine();
+
+	int spotsPerRow = 10;
+
+	// Loopa igenom alla platser, sorterade efter nummer
+	foreach (ParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<ParkingSpot>())
+	{
+		string color;
+		string content = $"{spot.SpotNumber:D2}";
+
+		int vehicleCount = spot.ParkedVehicles?.Count ?? 0;
+		int maxCapacity = 1; // Standardkapacitet om ingen specifik finns
+
+		if (vehicleCount > 0 && spot.ParkedVehicles != null && spot.ParkedVehicles.Count > 0)
+		{
+			string firstVehicleTypeName = spot.ParkedVehicles[0].GetType().Name.ToUpper();
+			VehicleTypeConfig? typeConfig = config.AllowedVehicleTypes?.FirstOrDefault(vt => vt.TypeName == firstVehicleTypeName);
+			if (typeConfig != null)
+			{
+				maxCapacity = typeConfig.MaxPerSpot;
+			}
+		}
+		else if (vehicleCount == 0 && config.AllowedVehicleTypes != null && config.AllowedVehicleTypes.Count > 0)
+		{
+			maxCapacity = config.AllowedVehicleTypes.Max(vt => vt.MaxPerSpot);
+		}
+
+		// Sätt färg baserat på status
+		if (vehicleCount == 0)
+		{
+			color = "green";
+			content += ": ---";
+		}
+		else if (vehicleCount < maxCapacity)
+		{
+			color = "yellow";
+			content += $": {spot.ParkedVehicles?[0]?.RegNum ?? "???"}...";
+		}
+		else // vehicleCount >= maxCapacity (Full plats)
+		{
+			color = "red";
+			content = $"{spot.SpotNumber:D2}:";
+
+			string regNums = "";
+			if (spot.ParkedVehicles != null) // Säkerhetskoll
+			{
+				// Loopa igenom alla fordon på platsen (kan vara 1 bil eller 2 MC)
+				foreach (Vehicle vehicle in spot.ParkedVehicles)
+				{
+					if (!string.IsNullOrEmpty(regNums)) 
+					{
+						regNums += ",";
+					}
+					regNums += vehicle.RegNum ?? "???";
+				}
+			}
+			content += regNums;
+		}
+
+		AnsiConsole.Markup($"[{color}]{content}[/] ");
+
+		if (spot.SpotNumber % spotsPerRow == 0)
+		{
+			Console.WriteLine();
+			Console.WriteLine();
+		}
+	}
+
+	AnsiConsole.WriteLine();
+	AnsiConsole.MarkupLine("[underline]Förklaring:[/]");
+	AnsiConsole.MarkupLine("[green]XX: ---[/] : Ledig Plats");
+	AnsiConsole.MarkupLine("[yellow]XX: ABC...[/] : Halvfull Plats (plats för fler av samma typ)");
+	AnsiConsole.MarkupLine("[red]XX: DEF...[/] : Full Plats");
+	AnsiConsole.WriteLine();
+
+	AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+	Console.ReadKey(true);
 }
 
 void ShowSpotContent(int spotNumber)
@@ -324,7 +413,7 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 
 	if (targetSpot != null)
 	{
-		Vehicle? newVehicle = null; // Ge ett startvärde (null) och markera som nullable (?)
+		Vehicle? newVehicle = null;
 
 		if (selectedTypeName == "CAR")
 		{
@@ -360,7 +449,7 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 	}
 }
 
-	ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
+ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 {
 	if (string.IsNullOrWhiteSpace(regNum)) return null;
 
@@ -377,7 +466,7 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 	return null;
 }
 
-bool RemoveVehicle(ParkingGarage garage, string regNum)
+bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decimal> priceList)
 {
 	if (string.IsNullOrWhiteSpace(regNum))
 	{
@@ -406,8 +495,32 @@ bool RemoveVehicle(ParkingGarage garage, string regNum)
 
 	if (vehicleToRemove != null)
 	{
+		TimeSpan parkedDuration = DateTime.Now - vehicleToRemove.ArrivalTime;
+		decimal cost = 0;
+
+		if (parkedDuration.TotalMinutes > 10)
+		{
+			string vehicleTypeName = vehicleToRemove is Car ? "CAR" : (vehicleToRemove is MC ? "MC" : "");
+
+			if (priceList.TryGetValue(vehicleTypeName, out decimal pricePerHour))
+			{
+				double totalHours = parkedDuration.TotalHours;
+				int billableHours = (int)Math.Ceiling(totalHours); // Avrunda alltid uppåt
+
+				cost = billableHours * pricePerHour;
+			}
+			else if (!string.IsNullOrEmpty(vehicleTypeName))
+			{
+				AnsiConsole.MarkupLine($"[yellow]Varning: Kunde inte hitta pris för fordonstyp '{vehicleTypeName}' i prislistan. Kostnad blir 0.[/]");
+			}
+		}
+
 		spot.ParkedVehicles?.Remove(vehicleToRemove);
-		Console.WriteLine($"\nFordonet med reg-nr {regNum} har tagits bort från plats {spot.SpotNumber}.");
+
+		AnsiConsole.MarkupLine($"\nFordonet med reg-nr [green]{regNum}[/] har tagits bort från plats [yellow]{spot.SpotNumber}[/].");
+		AnsiConsole.MarkupLine($"Parkerad tid: {parkedDuration.TotalMinutes:F0} minuter."); // F0 = inga decimaler
+		AnsiConsole.MarkupLine($"Kostnad: [bold yellow]{cost} CZK[/].");
+
 		return true;
 	}
 

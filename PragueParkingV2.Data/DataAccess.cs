@@ -10,6 +10,7 @@ namespace PragueParkingV2.Data
 		// Definierar filnamnet på ett ställe för enkelhetens skull
 		private const string GarageDataFile = "garage.json";
 		private const string ConfigFile = "config.json";
+		private const string PriceListFile = "pricelist.txt";
 
 		public void SaveGarage(ParkingGarage garage)
 		{
@@ -109,6 +110,72 @@ namespace PragueParkingV2.Data
 
 			Console.WriteLine($"[Info] Konfiguration aktiv: {loadedConfig.GarageSize} platser.");
 			return loadedConfig;
+		}
+
+		public Dictionary<string, decimal> LoadPriceList()
+		{
+			var priceList = new Dictionary<string, decimal>();
+			// Standardpriser om filen inte finns eller är felaktig
+			priceList["CAR"] = 20;
+			priceList["MC"] = 10;
+
+			try
+			{
+				if (File.Exists(PriceListFile))
+				{
+					var lines = File.ReadAllLines(PriceListFile);
+					var loadedPrices = new Dictionary<string, decimal>(); // Temporär för att bara använda filens värden om den är OK
+
+					foreach (var line in lines)
+					{
+						if (string.IsNullOrWhiteSpace(line) || line.Trim().StartsWith("#"))
+						{
+							continue;
+						}
+
+						// Dela upp raden vid ':'
+						var parts = line.Split(':');
+						if (parts.Length == 2)
+						{
+							string vehicleType = parts[0].Trim().ToUpper();
+			
+							if (decimal.TryParse(parts[1].Trim(), out decimal pricePerHour)) // Försök omvandla priset till decimal
+							{
+								loadedPrices[vehicleType] = pricePerHour; // Lägg till i den temporära listan
+							}
+							else
+							{
+								Console.WriteLine($"[Varning] Kunde inte tolka priset på raden i {PriceListFile}: {line}");
+							}
+						}
+						else
+						{
+							Console.WriteLine($"[Varning] Ignorerar ogiltig rad i {PriceListFile}: {line}");
+						}
+					}
+					// Om det lyckades ladda några priser från filen, använd dem istället för standard
+					if (loadedPrices.Count > 0)
+					{
+						Console.WriteLine($"[Info] Prislista laddad från {PriceListFile}.");
+						return loadedPrices;
+					}
+					else
+					{
+						Console.WriteLine($"[Varning] Inga giltiga priser hittades i {PriceListFile}. Använder standardpriser.");
+					}
+				}
+				else
+				{
+					Console.WriteLine($"[Varning] Prislistan {PriceListFile} hittades inte. Använder standardpriser.");
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"[Fel] Kunde inte ladda prislistan från {PriceListFile}: {ex.Message}");
+				Console.WriteLine("[Info] Använder standardpriser.");
+			}
+
+			return priceList;
 		}
 	}
 }
