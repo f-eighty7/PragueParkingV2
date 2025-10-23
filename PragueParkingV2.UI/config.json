@@ -1,0 +1,13 @@
+{
+	"GarageSize": 100,
+	"AllowedVehicleTypes": [
+		{
+			"TypeName": "CAR",
+			"MaxPerSpot": 1
+		},
+		{
+			"TypeName": "MC",
+			"MaxPerSpot": 2
+		}
+	]
+}
