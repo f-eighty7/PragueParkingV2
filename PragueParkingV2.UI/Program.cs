@@ -279,7 +279,7 @@ void DisplayGarageMapUI(ParkingGarage garage, Config config)
 			content = $"{spot.SpotNumber:D2}:";
 
 			string regNums = "";
-			if (spot.ParkedVehicles != null) // Säkerhetskoll
+			if (spot.ParkedVehicles != null)
 			{
 				// Loopa igenom alla fordon på platsen (kan vara 1 bil eller 2 MC)
 				foreach (Vehicle vehicle in spot.ParkedVehicles)
