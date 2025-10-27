@@ -520,7 +520,7 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 {
 	if (string.IsNullOrWhiteSpace(regNum))
 	{
-		AnsiConsole.MarkupLine($"\n[red]Fordonet med registreringsnummer '{regNum}' kunde inte hittas.[/]");
+		AnsiConsole.MarkupLine("\n[red]Ogiltigt registreringsnummer angivet.[/]");
 		return false;
 	}
 
