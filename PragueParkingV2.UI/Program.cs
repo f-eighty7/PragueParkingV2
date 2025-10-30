@@ -49,7 +49,7 @@ while (true)
 			break;
 
 		case "3. Flytta fordon":
-			MoveVehicleUI(garage);
+			MoveVehicleUI(garage, config);
 			if (garage != null) dataAccess.SaveGarage(garage);
 			break;
 
@@ -212,7 +212,7 @@ void RemoveVehicleUI(ParkingGarage garage, Dictionary<string, decimal> priceList
 }
 
 // Hanterar användardialogen för att flytta ett fordon.
-void MoveVehicleUI(ParkingGarage garage)
+void MoveVehicleUI(ParkingGarage garage, Config config)
 {
 	AnsiConsole.MarkupLine("[underline blue]Flytta Fordon[/]");
 	bool actionTaken = false;
@@ -222,17 +222,18 @@ void MoveVehicleUI(ParkingGarage garage)
 			.AllowEmpty()
 		)?.ToUpper();
 
-	// Avbryter om inget angavs.
+	// Om användaren avbröt (angav tomt svar), avsluta metoden
 	if (string.IsNullOrWhiteSpace(regNumToMove)) return;
 
-	// Kontrollerar direkt om fordonet finns för snabbare feedback.
 	var fromSpot = FindSpotByRegNum(garage, regNumToMove);
+
+	// Om fordonet inte hittades
 	if (fromSpot == null)
 	{
 		AnsiConsole.MarkupLine($"\n[red]Fordonet med registreringsnummer '{regNumToMove}' kunde inte hittas.[/]");
 		actionTaken = true;
 	}
-	// Om fordonet finns, fråga efter ny plats.
+	// Om fordonet hittades
 	else
 	{
 		var toSpotNumber = AnsiConsole.Prompt(
@@ -242,14 +243,14 @@ void MoveVehicleUI(ParkingGarage garage)
 				.ValidationErrorMessage("[red]Ange ett giltigt nummer eller lämna tomt.[/]")
 		);
 
-		// Avbryter om inget angavs.
+		// Om användaren avbröt (angav tomt svar), avsluta metoden
 		if (!toSpotNumber.HasValue) return;
 
-		bool success = MoveVehicle(garage, regNumToMove, toSpotNumber.Value);
+		bool success = MoveVehicle(garage, config, regNumToMove, toSpotNumber.Value);
 		actionTaken = true;
 	}
 
-	// Pausar oavsett om flytten lyckades eller ej, så användaren ser meddelandet.
+	// Om vi utförde en åtgärd (eller ett försök)
 	if (actionTaken)
 	{
 		AnsiConsole.WriteLine();
@@ -589,11 +590,11 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 }
 
 // Försöker flytta ett fordon från en plats till en annan.
-bool MoveVehicle(ParkingGarage garage, string regNum, int toSpotNumber)
+bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotNumber)
 {
 	if (string.IsNullOrWhiteSpace(regNum))
 	{
-		AnsiConsole.MarkupLine("\n[red]Ogiltigt registreringsnummer angivet.[/]");
+		Console.WriteLine("\nOgiltigt registreringsnummer angivet.");
 		return false;
 	}
 
@@ -601,62 +602,86 @@ bool MoveVehicle(ParkingGarage garage, string regNum, int toSpotNumber)
 
 	ParkingSpot? fromSpot = FindSpotByRegNum(garage, regNum);
 
+	// Om metoden returnerade 'null' (fordonet hittades inte)
 	if (fromSpot == null)
 	{
-		AnsiConsole.MarkupLine($"\n[red]Fordonet med registreringsnummer '{regNum}' kunde inte hittas.[/]");
+		Console.WriteLine($"\nFordonet med registreringsnummer '{regNum}' kunde inte hittas.");
 		return false;
 	}
 
-	// Validerar destinationsplatsens nummer.
+	Vehicle? vehicleToMove = fromSpot.ParkedVehicles?.FirstOrDefault(v => v.RegNum != null && v.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase));
+
+	// Om fordonet av någon anledning inte fanns i listan.
+	if (vehicleToMove == null)
+	{
+		Console.WriteLine($"\nInternt fel: Kunde inte hitta fordonsobjektet {regNum} på plats {fromSpot.SpotNumber}.");
+		return false;
+	}
+
 	int totalSpots = garage.Spots?.Count ?? 0;
+
 	if (toSpotNumber < 1 || toSpotNumber > totalSpots)
 	{
-		AnsiConsole.MarkupLine($"\n[red]Ogiltig destinationsplats. Ange ett nummer mellan 1-{totalSpots}.[/]");
+		Console.WriteLine($"\nOgiltig destinationsplats. Ange ett nummer mellan 1-{totalSpots}.");
 		return false;
 	}
 
 	ParkingSpot? toSpot = garage.Spots?[toSpotNumber - 1];
 
-	// Hanterar om platsen oväntat inte finns.
+	// Om platsobjektet av någon anledning var null
 	if (toSpot == null)
 	{
-		AnsiConsole.MarkupLine($"\n[red]Internt fel: Kunde inte hitta destinationsplats {toSpotNumber}.[/]");
+		Console.WriteLine($"\nInternt fel: Kunde inte hitta destinationsplats {toSpotNumber}.");
 		return false;
 	}
 
-	// Kontrollerar om destinationen är upptagen.
-	if ((toSpot.ParkedVehicles?.Count ?? 0) > 0)
-	{
-		AnsiConsole.MarkupLine($"\n[red]Destinationsplatsen {toSpotNumber} är redan upptagen.[/]");
-		return false;
-	}
-	// Kontrollerar om källan och destinationen är samma plats.
+	// Kontrollera om 'från' och 'till' är samma plats
 	if (fromSpot.SpotNumber == toSpot.SpotNumber)
 	{
-		AnsiConsole.MarkupLine("\n[yellow]Fordonet står redan på denna plats. Ingen flytt utförd.[/]");
+		Console.WriteLine("\nFordonet står redan på denna plats. Ingen flytt utförd.");
 		return false;
 	}
 
-	Vehicle? vehicleToMove = null;
-	// Hittar det exakta fordonsobjektet som ska flyttas.
-	foreach (Vehicle vehicle in fromSpot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
+	// Hämta reglerna (VehicleTypeConfig) för fordonet som flyttas
+	string vehicleTypeName = vehicleToMove.GetType().Name.ToUpper();
+	VehicleTypeConfig? typeConfig = config.AllowedVehicleTypes?.FirstOrDefault(vt => vt.TypeName == vehicleTypeName);
+
+	// Om inga regler hittades för denna fordonstyp
+	if (typeConfig == null)
 	{
-		if (vehicle.RegNum != null && vehicle.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase))
+		Console.WriteLine($"\n[Fel] Kan inte flytta fordonet: ingen konfiguration hittades för fordonstyp '{vehicleTypeName}'.");
+		return false;
+	}
+
+	int vehiclesAtToSpot = toSpot.ParkedVehicles?.Count ?? 0;
+
+	// Om antalet fordon på målplatsen är noll.
+	if (vehiclesAtToSpot == 0)
+	{
+		// Platsen är tom. Detta är alltid tillåtet. Inget behöver göras här.
+	}
+	// Om (antalet fordon + 1) är STÖRRE ÄN vad regeln tillåter
+	else if (vehiclesAtToSpot + 1 > typeConfig.MaxPerSpot)
+	{
+		Console.WriteLine($"\nDestinationsplatsen {toSpotNumber} är full (maximalt {typeConfig.MaxPerSpot} fordon av denna typ).");
+		return false;
+	}
+	// Platsen är inte tom, OCH den är inte överfull
+	else
+	{
+		string existingVehicleTypeName = toSpot.ParkedVehicles[0].GetType().Name.ToUpper();
+
+		// Jämför typen som står där med typen vi vill flytta dit (t.ex. "CAR" != "MC")
+		if (existingVehicleTypeName != vehicleTypeName)
 		{
-			vehicleToMove = vehicle;
-			break;
+			Console.WriteLine($"\nKan inte flytta: Plats {toSpotNumber} är upptagen av en annan fordonstyp ({existingVehicleTypeName}).");
+			return false;
 		}
 	}
 
-	// Om fordonsobjektet hittades:
-	if (vehicleToMove != null)
-	{
-		fromSpot.ParkedVehicles?.Remove(vehicleToMove);
-		toSpot.ParkedVehicles?.Add(vehicleToMove);
+	fromSpot.ParkedVehicles?.Remove(vehicleToMove);
+	toSpot.ParkedVehicles?.Add(vehicleToMove);
 
-		AnsiConsole.MarkupLine($"\nFordonet [green]{regNum}[/] har flyttats från plats [yellow]{fromSpot.SpotNumber}[/] till plats [yellow]{toSpot.SpotNumber}[/].");
-		return true;
-	}
-
-	return false;
+	Console.WriteLine($"\nFordonet {regNum} har flyttats från plats {fromSpot.SpotNumber} till plats {toSpot.SpotNumber}.");
+	return true;
 }
