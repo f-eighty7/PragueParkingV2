@@ -5,8 +5,7 @@ namespace PragueParkingV2.Core
 {
 	public class ParkingGarage
 	{
-		// ÄNDRING: Listan är nu av typen IParkingSpot
-		public List<IParkingSpot> Spots { get; set; } = new List<IParkingSpot>();
+		public List<ParkingSpot> Spots { get; set; } = new List<ParkingSpot>();
 	}
 
 }

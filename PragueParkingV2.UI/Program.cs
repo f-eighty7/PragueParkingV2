@@ -143,7 +143,7 @@ void SearchVehicleUI(ParkingGarage garage)
 		// Avbryter om användaren lämnar fältet tomt.
 		if (string.IsNullOrWhiteSpace(regNumToSearch)) return;
 
-		ParkingSpot? foundSpot = FindSpotByRegNum(garage, regNumToSearch);
+		IParkingSpot? foundSpot = FindSpotByRegNum(garage, regNumToSearch);
 		if (foundSpot != null)
 		{
 			AnsiConsole.MarkupLine($"\nFordonet hittades på plats: [yellow]{foundSpot.SpotNumber}[/]");
@@ -269,7 +269,7 @@ void DisplayGarageMapUI(ParkingGarage garage, Config config)
 	int spotCapacity = config.ParkingSpotSize;
 
 	// Loopa igenom alla platser, sorterade efter nummer
-	foreach (ParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<ParkingSpot>())
+	foreach (IParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<IParkingSpot>())
 	{
 		string color;
 		string content = $"{spot.SpotNumber:D2}"; // "01", "02", etc.
@@ -339,7 +339,7 @@ void ShowSpotContent(int spotNumber, Config config)
 	if (spotNumber >= 1 && spotNumber <= (garage.Spots?.Count ?? 0))
 	{
 		int index = spotNumber - 1;
-		ParkingSpot? spot = garage.Spots?[index];
+		IParkingSpot? spot = garage.Spots?[index];
 		int spotCapacity = config.ParkingSpotSize;
 
 		// Visar status och innehåll för platsen.
@@ -375,7 +375,7 @@ void PrintGarageStatus(ParkingGarage garage)
 	AnsiConsole.MarkupLine("[cyan]--- GARAGE STATUS ---[/]");
 	bool isEmpty = true;
 	// Loopar igenom alla platser sorterade efter nummer.
-	foreach (ParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<ParkingSpot>())
+	foreach (IParkingSpot spot in garage.Spots?.OrderBy(s => s.SpotNumber) ?? Enumerable.Empty<IParkingSpot>())
 	{
 		if (spot.OccupiedSpace > 0)
 		{
@@ -439,10 +439,10 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 	// STRATEGI A: Enkel parkering (t.ex. BIL, MC, CYKEL)
 	if (vehicleSize <= spotCapacity)
 	{
-		ParkingSpot? targetSpot = null;
+		IParkingSpot? targetSpot = null;
 
 		// Hitta första platsen där fordonet ryms
-		foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+		foreach (IParkingSpot spot in garage.Spots ?? Enumerable.Empty<IParkingSpot>())
 		{
 			int availableSpace = spotCapacity - spot.OccupiedSpace;
 
@@ -509,15 +509,15 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 }
 
 // Hittar och returnerar den ParkingSpot där ett fordon med angivet regNr finns.
-ParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
+IParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 {
 	if (string.IsNullOrWhiteSpace(regNum)) return null;
 
 	// Loopar igenom alla platser.
-	foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+	foreach (IParkingSpot spot in garage.Spots ?? Enumerable.Empty<IParkingSpot>())
 	{
 		// Loopar igenom alla fordon på den aktuella platsen.
-		// Vi letar efter 'IVehicle' istället för 'Vehicle'
+		// Letar efter 'IVehicle' istället för 'Vehicle'
 		foreach (IVehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<IVehicle>())
 		{
 			if (vehicle.RegNum != null && vehicle.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase))
@@ -543,7 +543,8 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 
 	// --- Hitta fordonet ---
 	// Hitta den FÖRSTA platsen fordonet står på.
-	ParkingSpot? firstSpot = FindSpotByRegNum(garage, regNum);
+	// Variabeln 'firstSpot' är nu av typen interface
+	IParkingSpot? firstSpot = FindSpotByRegNum(garage, regNum);
 	if (firstSpot == null)
 	{
 		AnsiConsole.MarkupLine($"\n[red]Ett fordon med registreringsnummer '{regNum}' kunde inte hittas.[/]");
@@ -587,7 +588,7 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 	// För en bil/MC tas den bort från 1 plats.
 	// För en buss tas den bort från 4 platser.
 	int spotsCleared = 0;
-	foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+	foreach (IParkingSpot spot in garage.Spots ?? Enumerable.Empty<IParkingSpot>())
 	{
 		if (spot.ParkedVehicles.Remove(vehicleToRemove))
 		{
@@ -616,7 +617,7 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotNumber)
 {
 	// --- Hitta fordonsobjektet ---
-	ParkingSpot? fromSpot = FindSpotByRegNum(garage, regNum);
+	IParkingSpot? fromSpot = FindSpotByRegNum(garage, regNum);
 	if (fromSpot == null)
 	{
 		AnsiConsole.MarkupLine($"\n[red]Fordonet med registreringsnummer '{regNum}' kunde inte hittas.[/]");
@@ -677,7 +678,7 @@ bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotN
 
 	// --- Utför flytten ---
 	// Steg 4a: Ta bort fordonet från ALLA platser det kan finnas på (för säkerhets skull)
-	foreach (ParkingSpot spot in garage.Spots ?? Enumerable.Empty<ParkingSpot>())
+	foreach (IParkingSpot spot in garage.Spots ?? Enumerable.Empty<IParkingSpot>())
 	{
 		spot.ParkedVehicles.Remove(vehicleToMove);
 	}
