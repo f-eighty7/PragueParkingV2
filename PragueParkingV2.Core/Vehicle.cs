@@ -1,15 +1,17 @@
-﻿using System.Text.Json.Serialization; //
+﻿using System.Text.Json.Serialization;
 
 namespace PragueParkingV2.Core
 {
-	[JsonDerivedType(typeof(Car), typeDiscriminator: "car")]
-	[JsonDerivedType(typeof(MC), typeDiscriminator: "mc")]
-	public class Vehicle
+	// 1. Gör klassen 'abstract'
+	// 2. Låt klassen implementera det nya interfacet 'IVehicle'
+	public abstract class Vehicle : IVehicle
 	{
-		// Egenskap 1: Alla fordon har ett reg-nummer.
-		public string RegNum { get; set; }
-
-		// Egenskap 2: Alla fordon har en ankomsttid.
+		public string RegNum { get; set; } = string.Empty;
 		public DateTime ArrivalTime { get; set; }
+
+		// Denna uppfyller det sista kravet från IVehicle.
+		// Gör den 'abstract' för att tvinga alla ärvande klasser
+		// (som Car, MC, Bus, Bike) att själva definiera sin storlek.
+		public abstract int Size { get; }
 	}
 }

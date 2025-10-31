@@ -1,4 +1,4 @@
-﻿using PragueParkingV2.Core;
+﻿   using PragueParkingV2.Core;
 using System.IO;		// Behövs för att hantera filer
 using System.Text.Json; // Behövs för serialisering
 using System.Text.Json.Serialization;
@@ -103,8 +103,11 @@ namespace PragueParkingV2.Data
 				Console.WriteLine("[Info] Lägger till standardfordonstyper (CAR, MC) i konfigurationen.");
 				loadedConfig.AllowedVehicleTypes = new List<VehicleTypeConfig>
 				{
-					new VehicleTypeConfig { TypeName = "CAR", MaxPerSpot = 1 },
-					new VehicleTypeConfig { TypeName = "MC", MaxPerSpot = 2 }
+				// MaxPerSpot är borttaget, logiken styrs nu av IVehicle.Size
+					new VehicleTypeConfig { TypeName = "CAR" },
+					new VehicleTypeConfig { TypeName = "MC" },
+					new VehicleTypeConfig { TypeName = "BIKE" },
+					new VehicleTypeConfig { TypeName = "BUS" }
 				};
 			}
 
@@ -118,6 +121,8 @@ namespace PragueParkingV2.Data
 			// Standardpriser om filen inte finns eller är felaktig
 			priceList["CAR"] = 20;
 			priceList["MC"] = 10;
+			priceList["BUS"] = 80;
+			priceList["BIKE"] = 5;
 
 			try
 			{

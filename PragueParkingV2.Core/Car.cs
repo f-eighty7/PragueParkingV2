@@ -2,7 +2,7 @@
 {
 	public class Car : Vehicle
 	{
-		// Den här klassen är tom just nu, men den ärver
-		// allt från Vehicle-klassen i den andra filen.
+		// En Bil alltid har storleken 4.
+		public override int Size { get; } = 4;
 	}
 }

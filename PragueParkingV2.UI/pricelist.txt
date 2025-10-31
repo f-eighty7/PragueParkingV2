@@ -1,6 +1,7 @@
-# Prislista för Prague Parking V2 (CZK per timme)
-# Format: FORDONSTYP:PRIS
-# Kommentarer börjar med #
-CAR:20
-MC:10
-# De första 10 minuterna är gratis
+# Prislista för Prague Parking
+# Format: FORDONSTYP: PRIS_PER_TIMME
+
+CAR: 20
+MC: 10
+BIKE: 5
+BUS: 80

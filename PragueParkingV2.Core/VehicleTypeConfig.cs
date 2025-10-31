@@ -4,7 +4,8 @@
 	{
 		public string TypeName { get; set; } = string.Empty;
 
-		public int MaxPerSpot { get; set; } = 1; 
-
+		// BORTTAGEN FÖR VG:
+		// public int MaxPerSpot { get; set; }
+		// Denna logik ersätts nu helt av IVehicle.Size och Config.ParkingSpotSize
 	}
 }

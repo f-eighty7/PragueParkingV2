@@ -1,13 +1,18 @@
 {
-	"GarageSize": 100,
-	"AllowedVehicleTypes": [
-		{
-			"TypeName": "CAR",
-			"MaxPerSpot": 1
-		},
-		{
-			"TypeName": "MC",
-			"MaxPerSpot": 2
-		}
-	]
+  "GarageSize": 100,
+  "ParkingSpotSize": 4,
+  "AllowedVehicleTypes": [
+    {
+      "TypeName": "CAR"
+    },
+    {
+      "TypeName": "MC"
+    },
+    {
+      "TypeName": "BIKE"
+    },
+    {
+      "TypeName": "BUS"
+    }
+  ]
 }
