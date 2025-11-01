@@ -2,6 +2,13 @@
 
 namespace PragueParkingV2.Core
 {
+	// Dessa talar om för System.Text.Json vilka klasser som ärver från Vehicle,
+	// vilket löser "tomt garage"-buggen.
+	[JsonDerivedType(typeof(Car), typeDiscriminator: "car")]
+	[JsonDerivedType(typeof(MC), typeDiscriminator: "mc")]
+	[JsonDerivedType(typeof(Bike), typeDiscriminator: "bike")]
+	[JsonDerivedType(typeof(Bus), typeDiscriminator: "bus")]
+
 	// 1. Gör klassen 'abstract'
 	// 2. Låt klassen implementera det nya interfacet 'IVehicle'
 	public abstract class Vehicle : IVehicle

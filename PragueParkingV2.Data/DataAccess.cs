@@ -36,8 +36,10 @@ namespace PragueParkingV2.Data
 		{
 			try
 			{
+				// 1. KONTROLLERA OM FILEN EXISTERAR
 				if (File.Exists(GarageDataFile))
 				{
+					// 1A. FILEN FINNS. FÖRSÖK LÄSA DEN.
 					string jsonString = File.ReadAllText(GarageDataFile);
 					if (!string.IsNullOrWhiteSpace(jsonString))
 					{
@@ -45,30 +47,52 @@ namespace PragueParkingV2.Data
 						if (loadedGarage != null)
 						{
 							Console.WriteLine($"[Info] Garage-data laddad från {GarageDataFile}.");
-							return loadedGarage;
+							return loadedGarage; // LYCKADES! Returnera det sparade garaget.
 						}
 					}
+
+					// Filen fanns, men var tom. Skapa ett tomt garage.
+					Console.WriteLine($"[Varning] {GarageDataFile} var tom. Skapar nytt, tomt garage.");
+					return CreateEmptyGarage(config);
+				}
+				else
+				{
+					// 1B. FILEN FINNS INTE. SKAPA TESTDATA (VG-krav)
+					ParkingGarage newGarage = CreateTestDataGarage(config);
+
+					// Spara garaget med testdata direkt så filen skapas
+					Console.WriteLine($"[Info] Sparar nytt garage med testdata till {GarageDataFile}...");
+					SaveGarage(newGarage);
+
+					return newGarage; // Returnera det nyskapade garaget med testdata.
 				}
 			}
 			catch (JsonException jsonEx)
 			{
-				Console.WriteLine($"[Fel] Fel vid läsning av JSON-data från {GarageDataFile}: {jsonEx.Message}");
-				Console.WriteLine("[Info] Skapar ett nytt, tomt garage istället.");
+				// 2. FILEN FINNS, MEN ÄR KORRUPT (JsonSerializer misslyckades)
+				Console.WriteLine($"[FEL] Fel vid läsning av JSON-data från {GarageDataFile}: {jsonEx.Message}");
+				Console.WriteLine("[FEL] Skapar ett nytt, TOMT garage för att förhindra dataförlust.");
+				Console.WriteLine($"[Varning] Din gamla garage-fil finns kvar men döps om till '{GarageDataFile}.corrupt'");
+
+				// Döper om den korrupta filen så att den inte skrivs över
+				try
+				{
+					File.Move(GarageDataFile, $"{GarageDataFile}.corrupt", true);
+				}
+				catch (Exception moveEx)
+				{
+					Console.WriteLine($"[FEL] Kunde inte döpa om korrupt fil: {moveEx.Message}");
+				}
+
+				return CreateEmptyGarage(config);
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"[Fel] Kunde inte ladda garage-data från {GarageDataFile}: {ex.Message}");
-				Console.WriteLine("[Info] Skapar ett nytt, tomt garage istället.");
+				// 3. ANNAT ALLVARLIGT FEL
+				Console.WriteLine($"[FEL] Kunde inte ladda garage-data från {GarageDataFile}: {ex.Message}");
+				Console.WriteLine("[FEL] Skapar ett nytt, tomt garage.");
+				return CreateEmptyGarage(config);
 			}
-
-			// Fallback: Skapa ett nytt garage OCH FYLL MED TESTDATA
-			ParkingGarage newGarage = CreateTestDataGarage(config);
-
-			// Spara garaget med testdata direkt så filen skapas
-			Console.WriteLine($"[Info] Sparar nytt garage med testdata till {GarageDataFile}...");
-			SaveGarage(newGarage);
-
-			return newGarage;
 		}
 
 		public Config LoadConfig()
@@ -262,6 +286,19 @@ namespace PragueParkingV2.Data
 				Console.WriteLine($"Fel vid sparande av {PriceListFile}: {ex.Message}");
 			}
 		}
+
+		// NY HJÄLPMETOD: Skapar bara ett tomt garage
+		private ParkingGarage CreateEmptyGarage(Config config)
+		{
+			Console.WriteLine($"[Info] Skapar nytt tomt garage med {config.GarageSize} platser.");
+			ParkingGarage newGarage = new ParkingGarage();
+			for (int i = 0; i < config.GarageSize; i++)
+			{
+				newGarage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
+			}
+			return newGarage;
+		}
 	}
 
 }
+

@@ -4,11 +4,8 @@
 	{
 		public int SpotNumber { get; set; }
 
-		// Ändring 1:
-		// Byter listan från <Vehicle> till <IVehicle>.
-		public List<IVehicle> ParkedVehicles { get; set; } = new List<IVehicle>();
+		public List<Vehicle> ParkedVehicles { get; set; } = new List<Vehicle>();
 
-		// ÄNDRING 2:
 		// Den räknar automatiskt ut hur mycket plats som är upptagen
 		// på just den här P-rutan.
 		public int OccupiedSpace

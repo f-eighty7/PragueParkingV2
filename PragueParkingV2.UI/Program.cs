@@ -154,7 +154,7 @@ void SearchVehicleUI(ParkingGarage garage)
 			AnsiConsole.MarkupLine("Fordon på denna plats:");
 
 			// === UPPDATERAD LOOP (VG) ===
-			foreach (IVehicle vehicle in foundSpot.ParkedVehicles ?? Enumerable.Empty<IVehicle>())
+			foreach (Vehicle vehicle in foundSpot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
 			{
 				// Dynamiskt typnamn och färg
 				string vehicleType = GetVehicleTypeMarkup(vehicle);
@@ -304,7 +304,7 @@ void DisplayGarageMapUI(ParkingGarage garage, Config config)
 			string regNums = "";
 
 			// Använd Distinct() för att bara visa en buss reg-nr en gång per ruta
-			foreach (IVehicle vehicle in spot.ParkedVehicles.Distinct())
+			foreach (Vehicle vehicle in spot.ParkedVehicles.Distinct())
 			{
 				if (!string.IsNullOrEmpty(regNums))
 				{
@@ -356,7 +356,7 @@ void ShowSpotContent(int spotNumber, Config config)
 			AnsiConsole.MarkupLine($"\nPå plats [yellow]{spotNumber}[/] står:");
 
 			// === UPPDATERAD LOOP (VG) ===
-			foreach (IVehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<IVehicle>())
+			foreach (Vehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
 			{
 				string vehicleType = GetVehicleTypeMarkup(vehicle); // Använd ny hjälpmetod
 				AnsiConsole.MarkupLine($"- Reg-nr: [green]{vehicle.RegNum ?? "N/A"}[/], Typ: {vehicleType}, Size: {vehicle.Size}, Ankomst: {vehicle.ArrivalTime}");
@@ -390,7 +390,7 @@ void PrintGarageStatus(ParkingGarage garage)
 			// Använd LINQ för att undvika dubletter (för bussar som upptar flera platser)
 			var distinctVehicles = spot.ParkedVehicles.Distinct();
 
-			foreach (IVehicle vehicle in distinctVehicles)
+			foreach (Vehicle vehicle in distinctVehicles)
 			{
 				string vehicleType = GetVehicleTypeMarkup(vehicle); // Använd ny hjälpmetod
 				AnsiConsole.Markup($"{vehicleType}:[green]{vehicle.RegNum ?? "N/A"}[/] (Size:{vehicle.Size}) ");
@@ -633,7 +633,7 @@ void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, st
 	}
 
 	// --- Skapa fordonet ---
-	IVehicle? newVehicle = CreateVehicle(selectedTypeName, regNum);
+	Vehicle? newVehicle = CreateVehicle(selectedTypeName, regNum);
 	if (newVehicle == null)
 	{
 		return;
@@ -727,8 +727,8 @@ IParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 	foreach (IParkingSpot spot in garage.Spots ?? Enumerable.Empty<IParkingSpot>())
 	{
 		// Loopar igenom alla fordon på den aktuella platsen.
-		// Letar efter 'IVehicle' istället för 'Vehicle'
-		foreach (IVehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<IVehicle>())
+		// Letar efter 'Vehicle' istället för 'Vehicle'
+		foreach (Vehicle vehicle in spot.ParkedVehicles ?? Enumerable.Empty<Vehicle>())
 		{
 			if (vehicle.RegNum != null && vehicle.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase))
 			{
@@ -761,7 +761,7 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 	}
 
 	// Hämta det faktiska fordons-objektet från platsen
-	IVehicle? vehicleToRemove = firstSpot.ParkedVehicles
+	Vehicle? vehicleToRemove = firstSpot.ParkedVehicles
 		.FirstOrDefault(v => v.RegNum != null && v.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase));
 
 	if (vehicleToRemove == null)
@@ -832,7 +832,7 @@ bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotN
 		return false;
 	}
 
-	IVehicle? vehicleToMove = fromSpot.ParkedVehicles
+	Vehicle? vehicleToMove = fromSpot.ParkedVehicles
 		.FirstOrDefault(v => v.RegNum != null && v.RegNum.Equals(regNum, StringComparison.OrdinalIgnoreCase));
 
 	if (vehicleToMove == null)
@@ -959,11 +959,11 @@ bool ReloadConfigLogic(DataAccess dataAccess, ParkingGarage garage, ref Config c
 
 #region// === HJÄLPMETODER ===
 
-IVehicle? CreateVehicle(string typeName, string regNum)
+Vehicle? CreateVehicle(string typeName, string regNum)
 {
 	DateTime arrival = DateTime.Now;
 
-	// En switch för att returnera rätt typ av IVehicle
+	// En switch för att returnera rätt typ av Vehicle
 	switch (typeName.ToUpper())
 	{
 		case "CAR":
@@ -981,7 +981,7 @@ IVehicle? CreateVehicle(string typeName, string regNum)
 }
 
 // Hjälpmetod som returnerar en färgkodad sträng (Markup) för en fordonstyp.
-string GetVehicleTypeMarkup(IVehicle vehicle)
+string GetVehicleTypeMarkup(Vehicle vehicle)
 {
 	// Hämta klassnamnet (t.ex. "CAR", "BIKE")
 	string typeName = vehicle.GetType().Name.ToUpper();

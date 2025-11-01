@@ -7,7 +7,7 @@
 		int SpotNumber { get; set; }
 
 		// Alla platser måste ha en lista av fordon (som använder det andra interfacet)
-		List<IVehicle> ParkedVehicles { get; set; }
+		List<Vehicle> ParkedVehicles { get; set; }
 
 		// Alla platser måste kunna rapportera sin beläggning
 		int OccupiedSpace { get; }
