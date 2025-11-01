@@ -1,5 +1,5 @@
 {
-    "GarageSize": 50,
+    "GarageSize": 100,
   "ParkingSpotSize": 4,
   "AllowedVehicleTypes": [
     {
