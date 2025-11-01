@@ -1,10 +1,8 @@
 ﻿using PragueParkingV2.Core;
 using PragueParkingV2.Data;
 using Spectre.Console;
-using System.Linq;
-using System.Collections.Generic;
 
-// ======== SKAPA DATAACCESS OCH LADDA GARAGET ========
+#region // ======== SKAPA DATAACCESS OCH LADDA GARAGET ========
 
 // Skapar ett objekt för att hantera filåtkomst.
 DataAccess dataAccess = new DataAccess();
@@ -16,6 +14,7 @@ Dictionary<string, decimal> priceList = dataAccess.LoadPriceList();
 ParkingGarage garage = dataAccess.LoadGarage(config);
 
 AnsiConsole.MarkupLine($"[grey]Konfiguration laddad: {config.GarageSize} platser.[/]");
+#endregion
 
 #region // ======== HUVUDMENY ========
 while (true)
@@ -33,6 +32,7 @@ while (true)
 				"3. Flytta fordon",
 				"4. Sök fordon",
 				"5. Visa Karta",
+				"6. Läs in ny konfiguration",
 				"0. Avsluta"
 			}));
 
@@ -59,6 +59,10 @@ while (true)
 
 		case "5. Visa Karta":
 			DisplayGarageMapUI(garage, config);
+			break;
+
+		case "6. Läs in ny konfiguration":
+			ManageConfigurationUI(ref config, ref priceList, garage, dataAccess);
 			break;
 
 		case "0. Avsluta":
@@ -400,12 +404,218 @@ void PrintGarageStatus(ParkingGarage garage)
 	}
 	AnsiConsole.MarkupLine("[cyan]---------------------[/]\n");
 }
+
+// Huvudmeny för konfiguration.
+void ManageConfigurationUI(ref Config config, ref Dictionary<string, decimal> priceList, ParkingGarage garage, DataAccess dataAccess)
+{
+	AnsiConsole.MarkupLine("[underline blue]Hantera Konfiguration[/]");
+	AnsiConsole.WriteLine();
+
+	var choice = AnsiConsole.Prompt(
+		new SelectionPrompt<string>()
+			.Title("Vad vill du göra?")
+			.PageSize(4)
+			.AddChoices(new[] {
+				"1. Ändra garage-inställningar (storlek, p-rute-kapacitet)",
+				"2. Ändra priser",
+				"3. Läs in ändringar från fil (config.json/pricelist.txt)",
+				"[grey]4. Avbryt[/]"
+			}));
+
+	switch (choice.Split('.')[0]) // Ta bara siffran
+	{
+		case "1":
+			ChangeGarageSettingsUI(ref config, garage, dataAccess);
+			break;
+		case "2":
+			ChangePricesUI(ref priceList, dataAccess);
+			break;
+		case "3":
+			ReloadConfigFromFileUI(ref config, ref priceList, garage, dataAccess);
+			break;
+		case "4":
+			return; // Avbryt
+	}
+}
+
+// Metod för att ändra garage inställninbgar.
+void ChangeGarageSettingsUI(ref Config config, ParkingGarage garage, DataAccess dataAccess)
+{
+	AnsiConsole.MarkupLine("[underline blue]Ändra Garage-inställningar[/]");
+	AnsiConsole.WriteLine();
+
+	// Ändra GarageSize
+	int newSize = AnsiConsole.Prompt(
+		new TextPrompt<int>($"Ange [green]ny garage-storlek[/] (nuvarande: {config.GarageSize}):")
+			.DefaultValue(config.GarageSize)
+			.ValidationErrorMessage("[red]Ange ett giltigt tal.[/]")
+	);
+
+	// Validera (samma logik som i ReloadConfigFromFileUI)
+	int highestOccupiedSpot = garage.Spots
+		.Where(s => s.OccupiedSpace > 0)
+		.Select(s => s.SpotNumber)
+		.DefaultIfEmpty(0)
+		.Max();
+
+	if (newSize < highestOccupiedSpot)
+	{
+		AnsiConsole.MarkupLine($"\n[red]FEL: Kan inte minska storleken.[/]");
+		AnsiConsole.MarkupLine($"[red]Den nya storleken ({newSize} platser) är mindre än den högsta upptagna platsen (Plats {highestOccupiedSpot}).[/]");
+	}
+	else
+	{
+		// Uppdatera storleken i minnet OCH i garaget
+		if (newSize > garage.Spots.Count)
+		{
+			int spotsAdded = 0;
+			for (int i = garage.Spots.Count; i < newSize; i++)
+			{
+				garage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
+				spotsAdded++;
+			}
+			AnsiConsole.MarkupLine($"[green]Garaget har utökats med {spotsAdded} nya platser.[/]");
+		}
+		else if (newSize < garage.Spots.Count)
+		{
+			int spotsToRemove = garage.Spots.Count - newSize;
+			garage.Spots.RemoveRange(newSize, spotsToRemove);
+			AnsiConsole.MarkupLine($"[yellow]Garaget har minskats med {spotsToRemove} tomma platser.[/]");
+		}
+
+		config.GarageSize = newSize;
+		AnsiConsole.MarkupLine($"[green]Garage-storleken är nu satt till {config.GarageSize}.[/]");
+	}
+
+	AnsiConsole.WriteLine();
+
+	// Ändra ParkingSpotSize
+	int newSpotSize = AnsiConsole.Prompt(
+		new TextPrompt<int>($"Ange [green]ny P-rute-kapacitet[/] (nuvarande: {config.ParkingSpotSize}):")
+			.DefaultValue(config.ParkingSpotSize)
+			.ValidationErrorMessage("[red]Ange ett giltigt tal (t.ex. 4).[/]")
+	);
+
+	config.ParkingSpotSize = newSpotSize;
+	AnsiConsole.MarkupLine($"[green]P-rute-kapacitet är nu satt till {config.ParkingSpotSize}.[/]");
+
+	//  TILLBAKA TILL FIL
+	dataAccess.SaveConfig(config);
+	AnsiConsole.MarkupLine("\n[bold green]Inställningarna har sparats till 'config.json'.[/]");
+
+	AnsiConsole.WriteLine();
+	AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+	Console.ReadKey(true);
+}
+
+// Metod för att ändra priser
+void ChangePricesUI(ref Dictionary<string, decimal> priceList, DataAccess dataAccess)
+{
+	AnsiConsole.MarkupLine("[underline blue]Ändra Priser[/]");
+	AnsiConsole.WriteLine();
+
+	// Skapa en ny lista av nycklarna för att kunna iterera,
+	// annars kan vi inte ändra i dictionaryn vi loopar över.
+	var vehicleTypes = priceList.Keys.ToList();
+
+	foreach (string vehicleType in vehicleTypes)
+	{
+		decimal newPrice = AnsiConsole.Prompt(
+			new TextPrompt<decimal>($"Ange nytt pris för [green]{vehicleType}[/] (nuvarande: {priceList[vehicleType]} CZK):")
+				.DefaultValue(priceList[vehicleType])
+				.ValidationErrorMessage("[red]Ange ett giltigt pris (t.ex. 20).[/]")
+		);
+
+		// Uppdatera värdet i dictionaryn
+		priceList[vehicleType] = newPrice;
+	}
+
+	// SPARA TILLBAKA TILL FIL
+	dataAccess.SavePriceList(priceList);
+	AnsiConsole.MarkupLine("\n[bold green]Prislistan har sparats till 'pricelist.txt'.[/]");
+
+	AnsiConsole.WriteLine();
+	AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+	Console.ReadKey(true);
+}
+
+// Hanterar menyvalet för att ladda om konfigurationsfilerna under körning.
+void ReloadConfigFromFileUI(ref Config config, ref Dictionary<string, decimal> priceList, ParkingGarage garage, DataAccess dataAccess)
+{
+	AnsiConsole.MarkupLine("[underline blue]Läs in ny konfiguration[/]");
+
+	// 1. Läs in de nya filerna
+	AnsiConsole.MarkupLine("[grey]Försöker läsa in 'config.json' och 'pricelist.txt'...[/]");
+	Config newConfig = dataAccess.LoadConfig();
+	Dictionary<string, decimal> newPriceList = dataAccess.LoadPriceList();
+
+	// 2. Validera den nya konfigurationen (VG-krav)
+	// Hitta det högsta platsnumret som för närvarande är upptaget
+	int highestOccupiedSpot = garage.Spots
+		.Where(s => s.OccupiedSpace > 0)
+		.Select(s => s.SpotNumber)
+		.DefaultIfEmpty(0) // Använd 0 om garaget är tomt
+		.Max();
+
+	// 3. Kontrollera om den nya storleken är giltig
+	if (newConfig.GarageSize < highestOccupiedSpot)
+	{
+		// NEKA ÄNDRINGEN
+		AnsiConsole.MarkupLine($"\n[red]FEL: Kan inte ladda ny konfiguration.[/]");
+		AnsiConsole.MarkupLine($"[red]Den nya storleken ({newConfig.GarageSize} platser) är mindre än den högsta upptagna platsen (Plats {highestOccupiedSpot}).[/]");
+		AnsiConsole.MarkupLine("[red]Avbryter inläsning för att förhindra dataförlust.[/]");
+	}
+	else
+	{
+		// GODKÄNN ÄNDRINGEN
+		AnsiConsole.MarkupLine("\n[green]Konfiguration och prislista har laddats om.[/]");
+
+		// 4. Hantera storleksändring
+
+		// Fall A: Garaget VÄXER
+		if (newConfig.GarageSize > garage.Spots.Count)
+		{
+			int spotsAdded = 0;
+			// Loopa från nuvarande antal upp till det nya antalet
+			for (int i = garage.Spots.Count; i < newConfig.GarageSize; i++)
+			{
+				// Lägg till nya, tomma platser
+				garage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
+				spotsAdded++;
+			}
+			AnsiConsole.MarkupLine($"[green]Garaget har utökats med {spotsAdded} nya platser.[/]");
+		}
+		// Fall B: Garaget KRYMPER (och vi har redan validerat att det är säkert)
+		else if (newConfig.GarageSize < garage.Spots.Count)
+		{
+			// Beräkna hur många platser som ska tas bort
+			int spotsToRemove = garage.Spots.Count - newConfig.GarageSize;
+
+			// Ta bort de sista 'spotsToRemove' platserna från listan.
+			// Index är 'newConfig.GarageSize' (t.ex. om ny storlek är 70, ta bort från index 70)
+			garage.Spots.RemoveRange(newConfig.GarageSize, spotsToRemove);
+
+			AnsiConsole.MarkupLine($"[yellow]Garaget har minskats med {spotsToRemove} tomma platser.[/]");
+		}
+		// Fall C: (newConfig.GarageSize == garage.Spots.Count) -> Gör ingenting.
+
+		// 5. Tilldela de nya objekten (det är därför vi använder 'ref')
+		config = newConfig;
+		priceList = newPriceList;
+
+		AnsiConsole.MarkupLine($"[green]Ny garage-storlek: {config.GarageSize}[/]");
+		AnsiConsole.MarkupLine($"[green]Ny P-rute-kapacitet: {config.ParkingSpotSize}[/]");
+	}
+
+	AnsiConsole.WriteLine();
+	AnsiConsole.MarkupLine("[grey]Tryck valfri tangent för att återgå...[/]");
+	Console.ReadKey(true);
+}
 #endregion
 
 #region // === LOGIK-METODER ===
 
-// Hanterar logiken för att parkera ett fordon baserat på konfiguration.
-// === NY AddVehicle-METOD FÖR VG ===
+// Hanterar logiken för att parkera ett fordon (både enstaka platser och block).
 void AddVehicle(ParkingGarage garage, Config config, string selectedTypeName, string regNum)
 {
 	if (string.IsNullOrWhiteSpace(regNum))
@@ -529,8 +739,7 @@ IParkingSpot? FindSpotByRegNum(ParkingGarage garage, string regNum)
 	return null;
 }
 
-// Försöker ta bort ett fordon baserat på regNr och beräknar kostnad.
-// === NY RemoveVehicle-METOD FÖR VG ===
+// Hanterar logiken för att ta bort ett fordon (från en eller flera platser) och beräkna kostnad.
 bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decimal> priceList)
 {
 	if (string.IsNullOrWhiteSpace(regNum))
@@ -612,8 +821,7 @@ bool RemoveVehicle(ParkingGarage garage, string regNum, Dictionary<string, decim
 	return true;
 }
 
-// Försöker flytta ett fordon från en plats till en annan.
-// === NY MoveVehicle-METOD FÖR VG ===
+// Försöker flytta ett fordon från en plats till en annan (stödjer ej fordon > 1 plats).
 bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotNumber)
 {
 	// --- Hitta fordonsobjektet ---
@@ -689,9 +897,68 @@ bool MoveVehicle(ParkingGarage garage, Config config, string regNum, int toSpotN
 	AnsiConsole.MarkupLine($"\n[green]Fordonet {regNum} har flyttats till plats {toSpot.SpotNumber}.[/]");
 	return true;
 }
+
+// Hanterar menyvalet för att ladda om konfigurationsfilerna under körning.
+bool ReloadConfigLogic(DataAccess dataAccess, ParkingGarage garage, ref Config config, ref Dictionary<string, decimal> priceList)
+{
+	// Spara nuvarande storlek för validering
+	int oldGarageSize = garage.Spots.Count;
+
+	// Ladda in de NYA filerna temporärt
+	Config newConfig = dataAccess.LoadConfig();
+	Dictionary<string, decimal> newPriceList = dataAccess.LoadPriceList();
+
+	// Validering (VG-krav)
+	// Kontrollera om vi försöker krympa garaget
+	if (newConfig.GarageSize < oldGarageSize)
+	{
+		// Kontrollerar om några platser som skulle tas bort är upptagna
+		// LINQ: Finns det 'Någon' (Any) plats...
+		bool occupiedSpotInRemoveRange = garage.Spots.Any(spot =>
+			spot.SpotNumber > newConfig.GarageSize && // ...vars platsnummer är STÖRRE än den nya storleken
+			spot.OccupiedSpace > 0);                  // ...OCH som är upptagen?
+
+		if (occupiedSpotInRemoveRange)
+		{
+			AnsiConsole.MarkupLine($"\n[red]Fel: Kan inte minska garagets storlek till {newConfig.GarageSize}.[/]");
+			AnsiConsole.MarkupLine($"[red]Minst en plats som skulle tas bort är fortfarande upptagen.[/]");
+			return false; // Avbryt omladdningen
+		}
+	}
+
+	// Om valideringen lyckas, tillämpa ändringarna
+
+	// Ersätt config- och pris-objekten
+	config = newConfig;
+	priceList = newPriceList;
+
+	// Hantera storleksändring av garaget
+	if (config.GarageSize > oldGarageSize)
+	{
+		// EXPANDERA: Lägg till nya tomma platser
+		int spotsToAdd = config.GarageSize - oldGarageSize;
+		for (int i = 0; i < spotsToAdd; i++)
+		{
+			garage.Spots.Add(new ParkingSpot { SpotNumber = oldGarageSize + i + 1 });
+		}
+		AnsiConsole.MarkupLine($"\n[blue]Garaget har expanderats med {spotsToAdd} nya platser.[/]");
+	}
+	else if (config.GarageSize < oldGarageSize)
+	{
+		// KRYMP: Ta bort tomma platser från slutet
+		// (Valideringen ovan har redan bekräftat att de är tomma)
+		int spotsToRemove = oldGarageSize - config.GarageSize;
+		garage.Spots.RemoveRange(config.GarageSize, spotsToRemove);
+		AnsiConsole.MarkupLine($"\n[blue]Garaget har krympts med {spotsToRemove} platser.[/]");
+	}
+	// (Om storleken är densamma händer inget här)
+
+	return true; // Omladdningen lyckades
+}
 #endregion
 
 #region// === HJÄLPMETODER ===
+
 IVehicle? CreateVehicle(string typeName, string regNum)
 {
 	DateTime arrival = DateTime.Now;
@@ -713,6 +980,7 @@ IVehicle? CreateVehicle(string typeName, string regNum)
 	}
 }
 
+// Hjälpmetod som returnerar en färgkodad sträng (Markup) för en fordonstyp.
 string GetVehicleTypeMarkup(IVehicle vehicle)
 {
 	// Hämta klassnamnet (t.ex. "CAR", "BIKE")

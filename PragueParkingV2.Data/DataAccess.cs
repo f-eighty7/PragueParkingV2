@@ -32,7 +32,7 @@ namespace PragueParkingV2.Data
 			}
 		}
 
-		public ParkingGarage LoadGarage(Config config) // <-- Tar nu emot Config!
+		public ParkingGarage LoadGarage(Config config)
 		{
 			try
 			{
@@ -61,13 +61,13 @@ namespace PragueParkingV2.Data
 				Console.WriteLine("[Info] Skapar ett nytt, tomt garage istället.");
 			}
 
-			// Fallback: Skapa ett nytt, tomt garage med storlek från konfigurationen.
-			Console.WriteLine($"[Info] Skapar nytt garage med {config.GarageSize} platser enligt konfiguration.");
-			ParkingGarage newGarage = new ParkingGarage();
-			for (int i = 0; i < config.GarageSize; i++) // Använder config.GarageSize!
-			{
-				newGarage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
-			}
+			// Fallback: Skapa ett nytt garage OCH FYLL MED TESTDATA
+			ParkingGarage newGarage = CreateTestDataGarage(config);
+
+			// Spara garaget med testdata direkt så filen skapas
+			Console.WriteLine($"[Info] Sparar nytt garage med testdata till {GarageDataFile}...");
+			SaveGarage(newGarage);
+
 			return newGarage;
 		}
 
@@ -182,5 +182,86 @@ namespace PragueParkingV2.Data
 
 			return priceList;
 		}
+
+		// Skapar ett nytt garage-objekt och fyller det med testdata
+		private ParkingGarage CreateTestDataGarage(Config config)
+		{
+			Console.WriteLine("[Info] Skapar nytt garage och fyller med testdata...");
+			ParkingGarage newGarage = new ParkingGarage();
+
+			// Fyll med tomma platser
+			for (int i = 0; i < config.GarageSize; i++)
+			{
+				newGarage.Spots.Add(new ParkingSpot { SpotNumber = i + 1 });
+			}
+
+			// Använder try/catch om config.GarageSize är för litet
+			try
+			{
+				// Parkera en BIL på plats 3
+				newGarage.Spots[2].ParkedVehicles.Add(new Car { RegNum = "CAR-01", ArrivalTime = DateTime.Now.AddHours(-1) });
+
+				// Parkera två MC på plats 5
+				newGarage.Spots[4].ParkedVehicles.Add(new MC { RegNum = "MC-01A", ArrivalTime = DateTime.Now.AddHours(-2) });
+				newGarage.Spots[4].ParkedVehicles.Add(new MC { RegNum = "MC-01B", ArrivalTime = DateTime.Now.AddHours(-3) });
+
+				// Parkera en BUSS på plats 10-13 (4 platser, 16 size / 4 capacity)
+				// Vi skapar buss-objektet FÖRST
+				Bus testBus = new Bus { RegNum = "BUS-01", ArrivalTime = DateTime.Now.AddMinutes(-30) };
+				// ...och lägger till SAMMA objekt på alla 4 platser
+				newGarage.Spots[9].ParkedVehicles.Add(testBus); // Plats 10
+				newGarage.Spots[10].ParkedVehicles.Add(testBus); // Plats 11
+				newGarage.Spots[11].ParkedVehicles.Add(testBus); // Plats 12
+				newGarage.Spots[12].ParkedVehicles.Add(testBus); // Plats 13
+
+				// Parkera två CYKLAR på plats 20
+				newGarage.Spots[19].ParkedVehicles.Add(new Bike { RegNum = "BIKE-1", ArrivalTime = DateTime.Now.AddMinutes(-15) });
+				newGarage.Spots[19].ParkedVehicles.Add(new Bike { RegNum = "BIKE-2", ArrivalTime = DateTime.Now.AddMinutes(-16) });
+			}
+			catch (ArgumentOutOfRangeException)
+			{
+				// Detta händer om config.GarageSize < 20
+				Console.WriteLine("[Varning] Garaget är för litet för att lägga till all testdata. Viss data skippades.");
+			}
+
+			return newGarage;
+		}
+
+		// === SPARA CONFIG.JSON ===
+		public void SaveConfig(Config config)
+		{
+			try
+			{
+				var options = new JsonSerializerOptions { WriteIndented = true };
+				string jsonString = JsonSerializer.Serialize(config, options);
+				File.WriteAllText(ConfigFile, jsonString);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Fel vid sparande av {ConfigFile}: {ex.Message}");
+			}
+		}
+
+		// === SPARA PRICELIST.TXT ===
+		public void SavePriceList(Dictionary<string, decimal> priceList)
+		{
+			try
+			{
+				// Skapa en lista av strängar, t.ex. "CAR: 20"
+				List<string> lines = new List<string> { "# Prislista i CZK per timme" };
+				foreach (var entry in priceList)
+				{
+					lines.Add($"{entry.Key.ToUpper()}: {entry.Value}");
+				}
+
+				// Skriv alla rader till filen
+				File.WriteAllLines(PriceListFile, lines);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Fel vid sparande av {PriceListFile}: {ex.Message}");
+			}
+		}
 	}
+
 }
